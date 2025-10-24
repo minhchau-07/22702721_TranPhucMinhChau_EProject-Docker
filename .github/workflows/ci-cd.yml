@@ -19,16 +19,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'   # dùng version Node bạn cần
+          node-version: '20'
 
-      # 2️⃣ Kiểm tra Docker
+      # 3️⃣ Kiểm tra Docker
       - name: Check Docker version
         run: docker --version
 
-      # 3️⃣ Build tất cả Docker image theo docker-compose.yml
+      # 4️⃣ Build tất cả Docker image theo docker-compose.yml
       - name: Build Docker images
         run: docker compose -f docker-compose.yml build
 
+      # 5️⃣ Tạo file .env cho CI
       - name: Generate .env file for CI
         run: |
           echo "JWT_SECRET=${{ vars.JWT_SECRET }}" >> .env.ci
@@ -36,94 +37,97 @@ jobs:
           echo "MONGODB_ORDER_URI=${{ vars.MONGODB_ORDER_URI }}" >> .env.ci
           echo "MONGODB_AUTH_URI=${{ vars.MONGODB_AUTH_URI }}" >> .env.ci
 
-      # 6️⃣ Start containers
+      # 6️⃣ Khởi động các container
       - name: Start containers
         run: docker compose --env-file .env.ci -f docker-compose.yml up -d
-      
-      # ngủ 1 chút để các container chạy cho xong ( các service cần để kết nối tới rabbitmq )
-      - name: Wait for containers to be ready
-        run: sleep 25
 
-      # 5️⃣ Kiểm tra container đang chạy
-      - name: list var to check
-        run: echo "hello ${{ vars.JWT_SECRET }} , ${{ vars.MONGODB_PRODUCT_URI }} , ${{ vars.MONGODB_ORDER_URI }}"
-
-      # 5️⃣ Kiểm tra container đang chạy
+      # 7️⃣ Kiểm tra container đã khởi động
       - name: List running containers
         run: docker ps
 
-      # 7 Chạy file test trên product service 
-      - name: Run File Test In Product Service
-        run: docker exec --env-file .env.ci mc_product_service npm test
+      # 8️⃣ Đợi MongoDB sẵn sàng
+      - name: Wait for MongoDB to be ready
+        run: |
+          echo "⏳ Đợi MongoDB khởi động..."
+          for i in {1..20}; do
+            if docker exec mc_mongodb mongosh --eval "db.runCommand({ ping: 1 })" &>/dev/null; then
+              echo "✅ MongoDB đã sẵn sàng!"
+              break
+            fi
+            echo "⚙️  MongoDB chưa sẵn sàng, chờ thêm 3s..."
+            sleep 3
+          done
 
-      # 6️⃣ Dừng container sau khi test
+      # 9️⃣ Đợi Product Service sẵn sàng
+      - name: Wait for Product Service to be ready
+        run: |
+          echo "⏳ Đợi Product Service phản hồi..."
+          for i in {1..10}; do
+            if curl -s http://localhost:3001/health &>/dev/null; then
+              echo "✅ Product Service đã sẵn sàng!"
+              break
+            fi
+            echo "⚙️  Product Service chưa sẵn sàng, chờ thêm 5s..."
+            sleep 5
+          done
+
+      # 🔍 10️⃣ Kiểm tra log Product Service trước khi test
+      - name: Show Product Service logs
+        run: docker logs mc_product_service --tail 50
+
+      # 11️⃣ Chạy file test trên product service
+      - name: Run File Test In Product Service
+        run: docker exec --env-file .env.ci mc_product_service npm test -- --timeout 40000
+
+      # 12️⃣ Dừng container sau khi test
       - name: Stop containers
         run: docker compose -f docker-compose.yml down
 
 
-
   deploys:
     runs-on: ubuntu-latest
-    needs: build-and-run # CHÍNH XÁC: Tham chiếu đến tên Job trên.
+    needs: build-and-run
 
     steps:
-      # 1️⃣ Lấy code
       - name: Checkout code
         uses: actions/checkout@v3
       
-      # 2️⃣ REBUILD TỪ ĐẦU 
       - name: Rebuild Docker Images for Deployment
         run: docker compose -f docker-compose.yml build --no-cache
 
-      # 3️⃣ Tag Image: Vì rebuild nên nó lại có tên dài
       - name: Tag Built Images to Simple Names
         run: |
           SERVICES=("mc_api_gateway" "mc_auth_service" "mc_order_service" "mc_product_service")
-          
           for SERVICE in ${SERVICES[@]}; do
-            # Tìm tên image đầy đủ (Repository) có chứa tên SERVICE của bạn
             COMPOSE_FULL_NAME=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${SERVICE}:latest" | head -n 1)
-
             if [ -n "$COMPOSE_FULL_NAME" ]; then
-              # Gán tên ngắn gọn (Tag) cho image tên dài vừa tìm được
-              echo "Tagging image: $COMPOSE_FULL_NAME thành tên ngắn: ${SERVICE}:latest"
+              echo "Tagging $COMPOSE_FULL_NAME -> ${SERVICE}:latest"
               docker tag "$COMPOSE_FULL_NAME" "${SERVICE}:latest"
             else
-              echo "❌ LỖI NGHIÊM TRỌNG: Không tìm thấy image $SERVICE sau khi rebuild. Vui lòng kiểm tra lại file docker-compose.yml và tên service."
+              echo "❌ Không tìm thấy image $SERVICE sau khi build."
               docker images
               exit 1
             fi
           done
         
-      # 4️⃣ Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 5️⃣ Tag và Push các Image lên Docker Hub
       - name: Tag and Push Images
         env:
           DOCKER_REPO: ${{ secrets.DOCKER_USERNAME }}
           TAG: ${{ github.sha }}
         run: |
           SERVICES=("mc_api_gateway" "mc_auth_service" "mc_order_service" "mc_product_service")
-
           for SERVICE in ${SERVICES[@]}; do
             REPO_NAME=$(echo $SERVICE | cut -d'_' -f2-)
-
-            echo "Bắt đầu đẩy image $SERVICE..."
-
-            # 1. Tag và Push bằng mã SHA (Lịch sử) - Sử dụng tên ngắn gọn (đã được tag ở bước 3)
+            echo "🚀 Pushing $SERVICE..."
             docker tag $SERVICE:latest $DOCKER_REPO/$REPO_NAME:$TAG
             docker push $DOCKER_REPO/$REPO_NAME:$TAG
-
-            # 2. Tag và Push bằng tag 'latest' (Phiên bản mới nhất)
             docker tag $SERVICE:latest $DOCKER_REPO/$REPO_NAME:latest
             docker push $DOCKER_REPO/$REPO_NAME:latest
-
-            echo "Đã hoàn thành $DOCKER_REPO/$REPO_NAME"
           done
-
-          echo "Đã hoàn thành việc đẩy tất cả images."
+          echo "✅ All images pushed successfully!"
