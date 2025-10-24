@@ -116,18 +116,12 @@ class ProductController {
 
   async getProductById(req, res) {
     try {
-      const id = req.query.id;
-      const product = await Product.findById(id);
-      if (!product) {
-        return res.status(404).json({message: "Product not found"});
-      }
-      res.status(200).json(product);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({message: "Server error"});
+      const product = await Product.findById(req.query.id);
+      res.status(product ? 200 : 404).json(product || { message: "Product not found" });
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
     }
   }
-
 }
 
 module.exports = ProductController;
