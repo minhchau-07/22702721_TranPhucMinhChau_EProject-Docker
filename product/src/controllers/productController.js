@@ -14,7 +14,7 @@ class ProductController {
     this.getOrderStatus = this.getOrderStatus.bind(this);
     this.ordersMap = new Map();
     this.productService = new ProductService();
-    this.getProductById = this.getProductById.bind(this);
+
   }
 
   async createProduct(req, res, next) {
@@ -114,19 +114,6 @@ class ProductController {
     }
   }
 
-  async getProductById(req, res) {
-    try {
-      // Lấy ID từ query string, ví dụ: /id?id=6719d92a11d9c7c8737c8993
-      const id = req.query.id;
-      const product = await Product.findById(id);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-      res.status(200).json(product);
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
-  }
 }
 
 module.exports = ProductController;

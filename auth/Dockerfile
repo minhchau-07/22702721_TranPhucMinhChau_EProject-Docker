@@ -1,5 +1,5 @@
 # Sử dụng Node.js phiên bản nhẹ
-FROM node:22.20.0-alpine
+FROM node:22.14.0-alpine
 
 # Chỉ định thư mục làm việc trong container
 WORKDIR /usr/src/app
