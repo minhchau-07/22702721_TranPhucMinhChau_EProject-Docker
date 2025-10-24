@@ -14,7 +14,7 @@ class ProductController {
     this.getOrderStatus = this.getOrderStatus.bind(this);
     this.ordersMap = new Map();
     this.productService = new ProductService();
-
+    this.getProductById = this.getProductById.bind(this);
   }
 
   async createProduct(req, res, next) {
@@ -111,6 +111,20 @@ class ProductController {
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Server error" });
+    }
+  }
+
+  async getProductById(req, res) {
+    try {
+      const id = req.query.id;
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({message: "Product not found"});
+      }
+      res.status(200).json(product);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({message: "Server error"});
     }
   }
 
