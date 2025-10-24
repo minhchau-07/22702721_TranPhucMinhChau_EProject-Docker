@@ -69,7 +69,7 @@ jobs:
       - name: Run File Test In Product Service
         run: |
           echo "🚀 Bắt đầu chạy test..."
-          docker exec --env-file .env.ci hoangmy_product_service npm test || echo "⚠️ Test failed but ignored"
+          docker exec --env-file .env.ci mc_product_service npm test || echo "⚠️ Test failed but ignored"
 
       # 1️⃣1️⃣ Dừng container sau khi test
       - name: Stop containers
@@ -93,7 +93,7 @@ jobs:
       # 3️⃣ Tag lại images
       - name: Tag Built Images
         run: |
-          SERVICES=("hoangmy_api_gateway" "hoangmy_auth_service" "hoangmy_order_service" "hoangmy_product_service")
+          SERVICES=("mc_api_gateway" "mc_auth_service" "mc_order_service" "mc_product_service")
           for SERVICE in ${SERVICES[@]}; do
             IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${SERVICE}:latest" | head -n 1)
             if [ -n "$IMAGE" ]; then
@@ -126,7 +126,7 @@ jobs:
           DOCKER_REPO: ${{ secrets.DOCKERHUB_USERNAME }}
           TAG: ${{ github.sha }}
         run: |
-          SERVICES=("hoangmy_api_gateway" "hoangmy_auth_service" "hoangmy_order_service" "hoangmy_product_service")
+          SERVICES=("mc_api_gateway" "mc_auth_service" "mc_order_service" "mc_product_service")
 
           for SERVICE in ${SERVICES[@]}; do
             REPO=$(echo $SERVICE | cut -d'_' -f2-)
