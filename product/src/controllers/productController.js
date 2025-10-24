@@ -114,15 +114,17 @@ class ProductController {
     }
   }
 
-  async getProductById(req, res, next) {
-    console.log(req.params.id)
+  async getProductById(req, res) {
     try {
-      const p = await this.productService.getProductById(req.params.id);
-      if (!p) return res.status(404).json({msg: "not found"})
-        res.json(p);
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({msg: e.message});
+      // Lấy ID từ query string, ví dụ: /id?id=6719d92a11d9c7c8737c8993
+      const id = req.query.id;
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.status(200).json(product);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
     }
   }
 }
